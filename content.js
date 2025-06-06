@@ -1,23 +1,22 @@
 (async function() {
-  // 1) Wait function
+  // 1) Utility to pause
   function wait(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
   }
 
-  // 2) Continuously click “Load More” until it disappears
+  // 2) Click “Load More” until it disappears
   async function expandAllResults() {
     while (true) {
-      // look for a button whose text is exactly “Load More” (case‐insensitive)
       const btn = Array.from(document.querySelectorAll("button")).find(b =>
         b.innerText.trim().toLowerCase() === "load more"
       );
-      if (!btn) break;            // no load‐more button left → stop
-      btn.click();                // simulate a click
-      await wait(1500);           // give it 1.5s to fetch & append new results
+      if (!btn) break;
+      btn.click();
+      await wait(1500);
     }
   }
 
-  // 3) Helper to fetch a detail page and grab the first “@uw.edu”
+  // 3) Fetch detail page and extract first “@uw.edu”
   async function fetchEmailFromOrgDetail(relativePath) {
     const detailUrl = window.location.origin + relativePath;
     try {
@@ -35,12 +34,12 @@
     }
   }
 
-  // 4) Expand everything on the listing page first
-  console.log("[RSO Scraper] Expanding all pages…");
+  // 4) Expand all “Load More” batches
+  console.log("[RSO Scraper] Expanding all results…");
   await expandAllResults();
   console.log("[RSO Scraper] All results loaded.");
 
-  // 5) Now gather every <a href="/organization/..."> card
+  // 5) Collect every organization link
   const orgAnchors = Array.from(
     document.querySelectorAll("#org-search-results a[href^='/organization/']")
   );
@@ -49,32 +48,41 @@
     return;
   }
 
-  // 6) For each anchor, grab the name and then fetch its detail page
+  // 6) For each anchor: grab name, description excerpt, then fetch its email
   const rows = [];
   for (let anchor of orgAnchors) {
-    const text = anchor.innerText.trim();
-    const orgName = text.split("\n")[0];         // first line is the name
+    // a) Name is the first line of visible text
+    const fullText = anchor.innerText.trim();
+    const orgName = fullText.split("\n")[0];
+
+    // b) Description excerpt is in the <p class="DescriptionExcerpt">
+    let descNode = anchor.querySelector(".DescriptionExcerpt");
+    const orgDesc = descNode ? descNode.innerText.trim() : "";
+
+    // c) Fetch email from detail page
     const relHref = anchor.getAttribute("href"); // e.g. "/organization/thinkcyber"
     console.log(`[RSO Scraper] Fetching email for ${orgName} → ${relHref}`);
     const email = await fetchEmailFromOrgDetail(relHref);
     console.log(`  → ${orgName}: ${email || "<no email found>"}`);
-    rows.push([orgName, email]);
+
+    rows.push([orgName, email, orgDesc]);
   }
 
-  // 7) Build CSV text
-  let csv = "Organization Name,Email Address\n";
-  for (let [name, address] of rows) {
+  // 7) Build CSV text with three columns
+  let csv = "Organization Name,Email Address,Description\n";
+  for (let [name, address, desc] of rows) {
     const safeName = `"${name.replace(/"/g, '""')}"`;
     const safeAddr = `"${(address || "").replace(/"/g, '""')}"`;
-    csv += `${safeName},${safeAddr}\n`;
+    const safeDesc = `"${desc.replace(/"/g, '""')}"`;
+    csv += `${safeName},${safeAddr},${safeDesc}\n`;
   }
 
-  // 8) Trigger download
+  // 8) Trigger CSV download
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = "rso_emails.csv";
+  a.download = "rso_emails_and_descriptions.csv";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
