@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Huskylink STEM RSO Scraper",
+  "version": "1.0",
+  "description": "Scrapes STEM RSO organizations from Huskylink and downloads a CSV.",
+  "host_permissions": [
+    "https://huskylink.washington.edu/organizations*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://huskylink.washington.edu/organizations*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
